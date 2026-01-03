@@ -2,55 +2,16 @@ import os
 import requests
 from io import BytesIO
 from PIL import Image
-from pydub import AudioSegment
+import subprocess
 import time
-
-# Utility functions for CMS Dashboard associated with Cockpit CMS v2
-
-def process_image(file_bytes, mode='horizontal'):
-    """
-    Process image based on mode.
-    Returns: Bytes of processed JPEG
-    """
-    try:
-        img = Image.open(BytesIO(file_bytes))
-        
-        if mode == 'square':
-            # Center Crop & Square
-            width, height = img.size
-            new_size = min(width, height)
-            left = (width - new_size) / 2
-            top = (height - new_size) / 2
-            right = (width + new_size) / 2
-            bottom = (height + new_size) / 2
-            img = img.crop((left, top, right, bottom))
-            target_size = (800, 800)
-        else:
-            # Horizontal (Stretch/Squash to 16:9)
-            target_size = (1280, 720)
-            
-        # Resize
-        img_resized = img.resize(target_size, Image.Resampling.LANCZOS)
-        
-        # Save compressed
-        out_buffer = BytesIO()
-        img_resized.convert('RGB').save(out_buffer, format='JPEG', quality=60)
-        return out_buffer.getvalue()
-        
-    except Exception as e:
-        print(f"Image Processing Error: {e}")
-        return None
 
 def process_audio(file_bytes, original_filename, channels=1):
     """
-    Convert audio to low-bitrate MP3.
-    Target: 64kbps
-    Channels: 1 (Mono) or 2 (Stereo)
+    Convert audio to low-bitrate MP3 using ffmpeg directly.
+    Target: 64kbps, Channels: 1 (Mono) or 2 (Stereo)
+    Requires ffmpeg to be installed and in PATH.
     """
     try:
-        # Pydub requires a file path or file-like object.
-        # We'll save the input bytes to a temp file to let pydub/ffmpeg handle it.
-        # This is safer for format detection.
         ext = original_filename.split('.')[-1].lower()
         temp_in = f"temp_audio_in_{int(time.time())}.{ext}"
         temp_out = f"temp_audio_out_{int(time.time())}.mp3"
@@ -58,11 +19,19 @@ def process_audio(file_bytes, original_filename, channels=1):
         with open(temp_in, "wb") as f:
             f.write(file_bytes)
             
-        audio = AudioSegment.from_file(temp_in)
+        # ffmpeg command: -i input -b:a 64k -ac {channels} -y output
+        # -y overwrites output file if exists
+        cmd = [
+            "ffmpeg", 
+            "-i", temp_in, 
+            "-b:a", "64k", 
+            "-ac", str(channels), 
+            "-y", 
+            temp_out
+        ]
         
-        # Export as low quality MP3
-        # Bitrate: 64k
-        audio.set_channels(channels).export(temp_out, format="mp3", bitrate="64k")
+        # Run ffmpeg, capture output to avoid spamming console
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Read back
         with open(temp_out, "rb") as f:
@@ -77,6 +46,9 @@ def process_audio(file_bytes, original_filename, channels=1):
             
         return processed_bytes
         
+    except subprocess.CalledProcessError as e:
+        print(f"FFmpeg Error: {e.stderr.decode()}")
+        return None
     except Exception as e:
         print(f"Audio Processing Error: {e}")
         return None
