@@ -7,42 +7,27 @@ import cms_utils
 # Load environment variables
 load_dotenv('.env.local')
 
-st.set_page_config(page_title="CMS Dashboard", layout="wide")
+st.set_page_config(page_title="CMS Dashboard", layout="wide", initial_sidebar_state="collapsed")
 
 # Sidebar Configuration
-st.sidebar.title("CMS Config")
 # Use secrets if available (Streamlit Cloud), else env vars
-default_url = os.getenv("COCKPIT_URL", "")
-default_token = os.getenv("API_TOKEN", "")
+# Config Loading
+api_url = os.getenv("COCKPIT_URL", "")
+api_token = os.getenv("API_TOKEN", "")
 default_password = os.getenv("UPLOAD_PASSWORD", "")
 
-# If configured in streamlit secrets (preferred for cloud)
+# Try loading from secrets (Cloud)
 try:
-    if str(st.secrets) and "COCKPIT_URL" in st.secrets:
-        default_url = st.secrets["COCKPIT_URL"]
-    if str(st.secrets) and "API_TOKEN" in st.secrets:
-        default_token = st.secrets["API_TOKEN"]
-    if str(st.secrets) and "UPLOAD_PASSWORD" in st.secrets:
-        default_password = st.secrets["UPLOAD_PASSWORD"]
+    if st.secrets:
+        if "COCKPIT_URL" in st.secrets: api_url = st.secrets["COCKPIT_URL"]
+        if "API_TOKEN" in st.secrets: api_token = st.secrets["API_TOKEN"]
+        if "UPLOAD_PASSWORD" in st.secrets: default_password = st.secrets["UPLOAD_PASSWORD"]
 except (FileNotFoundError, AttributeError):
     pass
 
-api_url = st.sidebar.text_input("Cockpit URL (Base)", value=default_url)
-api_token = st.sidebar.text_input("API Token", value=default_token, type="password")
-
-if st.sidebar.button("Check Connection"):
-    if not api_url or not api_token:
-        st.sidebar.error("Please enter URL and Token")
-    else:
-        try:
-            check_url = f"{api_url}/api/content/items/articles?limit=1"
-            r = requests.get(check_url, headers={'api-key': api_token}, timeout=5)
-            if r.status_code == 200:
-                st.sidebar.success("Connected!")
-            else:
-                st.sidebar.error(f"Failed: {r.status_code}")
-        except Exception as e:
-            st.sidebar.error(f"Error: {e}")
+if not api_url or not api_token or not default_password:
+    st.error("❌ Missing Configuration! Check .env.local or Streamlit Secrets.")
+    st.stop()
 
 st.title("Admin Dashboard")
 
