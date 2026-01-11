@@ -5,6 +5,51 @@ from PIL import Image
 import subprocess
 import time
 
+def process_image(file_bytes, mode='horizontal'):
+    """
+    Process image based on mode:
+    - 'horizontal': Resize to 1280x720 (16:9)
+    - 'square': Center crop and resize to 800x800
+    Returns bytes of processed JPEG.
+    """
+    try:
+        img = Image.open(BytesIO(file_bytes))
+        
+        if mode == 'square':
+            # Calculate center crop dimensions
+            width, height = img.size
+            new_size = min(width, height)
+            
+            left = (width - new_size) / 2
+            top = (height - new_size) / 2
+            right = (width + new_size) / 2
+            bottom = (height + new_size) / 2
+            
+            # Crop to square
+            img = img.crop((left, top, right, bottom))
+            
+            # Resize directly to 800x800
+            target_size = (800, 800)
+            img = img.resize(target_size, Image.Resampling.LANCZOS)
+            
+        else:
+            # Horizontal (16:9) - Force resize to 1280x720
+            # Note: The rough code just resized, it didn't crop to aspect ratio first.
+            # Assuming force resize is intended as per rough code.
+            target_size = (1280, 720)
+            img = img.resize(target_size, Image.Resampling.LANCZOS)
+        
+        # Save to bytes with compression
+        out_buffer = BytesIO()
+        # Convert to RGB to ensure JPEG compatibility (remove alpha channel if PNG)
+        img.convert('RGB').save(out_buffer, format='JPEG', quality=60)
+        
+        return out_buffer.getvalue()
+        
+    except Exception as e:
+        print(f"Image Processing Error: {e}")
+        return None
+
 def process_audio(file_bytes, original_filename, channels=1):
     """
     Convert audio to low-bitrate MP3 using ffmpeg directly.
